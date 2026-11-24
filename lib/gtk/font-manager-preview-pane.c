@@ -520,6 +520,8 @@ on_page_switch (FontManagerPreviewPane *self,
 {
     g_return_if_fail(self != NULL);
     g_idle_add((GSourceFunc) font_manager_preview_pane_update, self);
+    if (self->properties)
+    font_manager_font_properties_page_cancel_rename(FONT_MANAGER_PROPERTIES_PAGE(self->properties));
     return;
 }
 
@@ -677,6 +679,8 @@ font_manager_preview_pane_set_font (FontManagerPreviewPane *self,
         g_object_notify_by_pspec(G_OBJECT(self), obj_properties[PROP_FONT]);
     self->update_required = TRUE;
     font_manager_preview_pane_update(self);
+    if (self->properties)
+    font_manager_font_properties_page_cancel_rename(FONT_MANAGER_PROPERTIES_PAGE(self->properties));
     return;
 }
 
