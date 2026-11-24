@@ -40,8 +40,124 @@ struct _FontManagerPropertiesPage
     GtkWidget   *designer_label;
     GtkWidget   *grid;
 
+/* MVP Issue #275: edicao do nome da familia no painel de propriedades */
+    GtkWidget   *rename_box;
+    GtkWidget   *rename_entry;
+    GtkWidget   *rename_button;
+    GtkWidget   *confirm_button;
+    GtkWidget   *cancel_button;
+    GtkWidget   *rename_error_label;
+    gboolean     renaming;
+
     JsonObject  *properties;
 };
+
+enum
+{
+    FONT_RENAMED,
+    NUM_SIGNALS
+};
+
+static gboolean
+is_valid_font_name (const gchar *name, const gchar **reason)
+{
+    if (!name || *name == '\0') {
+        if (reason) *reason = _("Font name cannot be empty.");
+        return FALSE;
+    }
+
+    g_autofree gchar *trimmed = g_strstrip(g_strdup(name));
+    if (*trimmed == '\0') {
+        if (reason) *reason = _("Font name cannot contain only whitespace.");
+        return FALSE;
+    }
+
+    for (const gchar *p = name; *p != '\0'; p = g_utf8_next_char(p)) {
+        gunichar ch = g_utf8_get_char(p);
+        if (g_unichar_iscntrl(ch) || ch == '/' || ch == '\\') {
+            if (reason) *reason = _("Font name contains invalid or control characters.");
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static void
+set_rename_mode (FontManagerPropertiesPage *self, gboolean active)
+{
+    g_return_if_fail(FONT_MANAGER_IS_PROPERTIES_PAGE(self));
+    self->renaming = active;
+
+    if (self->rename_entry) {
+        gtk_widget_set_visible(self->rename_entry, active);
+        if (active && self->properties && json_object_has_member(self->properties, "family")) {
+            const gchar *current = json_object_get_string_member(self->properties, "family");
+            gtk_editable_set_text(GTK_EDITABLE(self->rename_entry), current ? current : "");
+            gtk_widget_grab_focus(self->rename_entry);
+        }
+    }
+
+    if (self->confirm_button)
+        gtk_widget_set_visible(self->confirm_button, active);
+
+    if (self->cancel_button)
+        gtk_widget_set_visible(self->cancel_button, active);
+
+    if (self->rename_button)
+        gtk_widget_set_visible(self->rename_button, !active && (self->properties != NULL));
+
+    if (!active && self->rename_error_label) {
+        gtk_label_set_text(GTK_LABEL(self->rename_error_label), NULL);
+        gtk_widget_set_visible(self->rename_error_label, FALSE);
+    }
+}
+
+static void
+on_rename_start_clicked (GtkButton *button, FontManagerPropertiesPage *self)
+{
+    g_return_if_fail(FONT_MANAGER_IS_PROPERTIES_PAGE(self));
+    set_rename_mode(self, TRUE);
+}
+
+static void
+on_rename_cancel_clicked (GtkButton *button, FontManagerPropertiesPage *self)
+{
+    g_return_if_fail(FONT_MANAGER_IS_PROPERTIES_PAGE(self));
+    set_rename_mode(self, FALSE);
+}
+
+static void
+on_rename_confirm_clicked (GtkButton *button, FontManagerPropertiesPage *self)
+{
+    g_return_if_fail(FONT_MANAGER_IS_PROPERTIES_PAGE(self));
+    if (!self->rename_entry || !self->properties)
+        return;
+
+    const gchar *candidate = gtk_editable_get_text(GTK_EDITABLE(self->rename_entry));
+    const gchar *reason = NULL;
+
+    if (!is_valid_font_name(candidate, &reason)) {
+        if (self->rename_error_label) {
+            gtk_label_set_text(GTK_LABEL(self->rename_error_label), reason);
+            gtk_widget_set_visible(self->rename_error_label, TRUE);
+        }
+        return;
+    }
+
+    g_autofree gchar *old_name = NULL;
+    if (json_object_has_member(self->properties, "family"))
+        old_name = g_strdup(json_object_get_string_member(self->properties, "family"));
+
+    g_autofree gchar *new_name = g_strstrip(g_strdup(candidate));
+    json_object_set_string_member(self->properties, "family", new_name);
+
+    set_rename_mode(self, FALSE);
+    update(self);
+    g_signal_emit(self, signals[FONT_RENAMED], 0, old_name ? old_name : "", new_name);
+}
+
+static guint signals[NUM_SIGNALS] = { 0, };
 
 G_DEFINE_TYPE(FontManagerPropertiesPage, font_manager_font_properties_page, GTK_TYPE_WIDGET)
 
@@ -206,6 +322,8 @@ reset (FontManagerPropertiesPage *self)
     gtk_link_button_set_uri(GTK_LINK_BUTTON(self->designer), "");
     gtk_widget_set_tooltip_text(self->designer, "");
     gtk_label_set_label(GTK_LABEL(self->designer_label), "");
+
+    set_rename_mode(self, FALSE)
     return;
 }
 
@@ -306,6 +424,15 @@ font_manager_font_properties_page_class_init (FontManagerPropertiesPageClass *kl
     object_class->dispose = font_manager_font_properties_page_dispose;
     gtk_widget_class_set_layout_manager_type(widget_class, GTK_TYPE_BOX_LAYOUT);
     gtk_widget_class_set_css_name(widget_class, "FontManagerPropertiesPage");
+
+    set_rename_mode(self, FALSE);
+
+    signals[FONT_RENAMED] = g_signal_new("font-renamed",
+                                     FONT_MANAGER_TYPE_PROPERTIES_PAGE,
+                                     G_SIGNAL_RUN_FIRST,
+                                     0, NULL, NULL, NULL,
+                                     G_TYPE_NONE, 2,
+                                     G_TYPE_STRING, G_TYPE_STRING);
     return;
 }
 
@@ -375,3 +502,9 @@ font_manager_font_properties_page_new ()
     return g_object_new(FONT_MANAGER_TYPE_PROPERTIES_PAGE, NULL);
 }
 
+void
+font_manager_font_properties_page_cancel_rename (FontManagerPropertiesPage *self)
+{
+    g_return_if_fail(FONT_MANAGER_IS_PROPERTIES_PAGE(self));
+    set_rename_mode(self, FALSE);
+}

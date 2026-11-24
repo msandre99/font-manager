@@ -42,3 +42,4 @@ GtkWidget * font_manager_font_properties_page_new ();
 void font_manager_font_properties_page_update (FontManagerPropertiesPage *self,
                                                JsonObject                *properties);
 
+void font_manager_font_properties_page_cancel_rename (FontManagerPropertiesPage *self);
