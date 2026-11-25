@@ -137,7 +137,7 @@ on_rename_confirm_clicked (GtkButton *button, FontManagerPropertiesPage *self)
     const gchar *candidate = gtk_editable_get_text(GTK_EDITABLE(self->rename_entry));
     const gchar *reason = NULL;
 
-    if (!is_valid_font_name(candidate, &reason)) {
+  if (!is_valid_font_name(candidate, &reason)) { {
         if (self->rename_error_label) {
             gtk_label_set_text(GTK_LABEL(self->rename_error_label), reason);
             gtk_widget_set_visible(self->rename_error_label, TRUE);
@@ -323,7 +323,7 @@ reset (FontManagerPropertiesPage *self)
     gtk_widget_set_tooltip_text(self->designer, "");
     gtk_label_set_label(GTK_LABEL(self->designer_label), "");
 
-    set_rename_mode(self, FALSE)
+    set_rename_mode(self, FALSE);
     return;
 }
 
@@ -425,7 +425,6 @@ font_manager_font_properties_page_class_init (FontManagerPropertiesPageClass *kl
     gtk_widget_class_set_layout_manager_type(widget_class, GTK_TYPE_BOX_LAYOUT);
     gtk_widget_class_set_css_name(widget_class, "FontManagerPropertiesPage");
 
-    set_rename_mode(self, FALSE);
 
     signals[FONT_RENAMED] = g_signal_new("font-renamed",
                                      FONT_MANAGER_TYPE_PROPERTIES_PAGE,
